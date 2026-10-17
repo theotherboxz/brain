@@ -2,8 +2,10 @@
 """
 View your brain in the browser with one command.
 
+    python view_brain.py                                   (shows a menu to pick the files)
     python view_brain.py neurons.csv connections.csv roles.csv
 
+With no file names it lists the CSV files in this folder and you pick by number.
 It builds a small self-contained page (brain_view.html) and opens it.
 connections.csv and roles.csv (from brain_roles.py) are optional.
 File order doesn't matter.
@@ -145,6 +147,63 @@ def read_rows(path):
     return rows
 
 
+def classify(path):
+    """Look at the first line of a CSV and say what kind of file it is."""
+    try:
+        with open(path, newline="") as f:
+            head = next(csv.reader(f), [])
+    except (OSError, UnicodeDecodeError):
+        return None
+    cols = {c.strip().lower() for c in head}
+    if {"pre", "post"} <= cols:
+        return "connections"
+    if {"x", "y", "z"} <= cols:
+        return "neurons"
+    if {"id", "role"} <= cols:
+        return "roles"
+    return None
+
+
+def ask(kind, options, required):
+    print(f"\nWhich {kind} file?")
+    for i, name in enumerate(options, 1):
+        print(f"  {i}) {name}")
+    if not required:
+        print("  0) none")
+    while True:
+        raw = input("Type a number (Enter = 1): ").strip() or "1"
+        if raw in options:
+            return raw
+        if raw.isdigit():
+            k = int(raw)
+            if k == 0 and not required:
+                return None
+            if 1 <= k <= len(options):
+                return options[k - 1]
+        print("Please type one of the numbers above.")
+
+
+def choose_files():
+    found = {"neurons": [], "connections": [], "roles": []}
+    for p in sorted(Path(".").glob("*.csv")):
+        kind = classify(p)
+        if kind:
+            found[kind].append(p.name)
+    if not found["neurons"]:
+        sys.exit("No neurons file found in this folder.\n"
+                 "Run factory_brain.py first, or open a terminal in the folder with your CSV files.")
+    chosen = []
+    for kind, required in (("neurons", True), ("connections", False), ("roles", False)):
+        if found[kind]:
+            pick = ask(kind, found[kind], required)
+            if pick:
+                chosen.append(pick)
+        else:
+            print(f"\n(No {kind} file in this folder, skipping.)")
+    print("\nUsing: " + "  ".join(chosen))
+    return chosen
+
+
 def build(neurons, conns, roles, max_neurons, max_edges):
     rng = random.Random(1)
     idx = list(range(len(neurons)))
@@ -203,15 +262,21 @@ def build(neurons, conns, roles, max_neurons, max_edges):
 def main():
     ap = argparse.ArgumentParser(description="View neurons.csv and connections.csv in the browser.",
                                  epilog=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("files", nargs="+", help="neurons.csv and (optionally) connections.csv")
+    ap.add_argument("files", nargs="*", help="neurons.csv, and optionally connections.csv and roles.csv (leave empty for a menu)")
     ap.add_argument("--max-neurons", type=int, default=20000)
     ap.add_argument("--max-edges", type=int, default=8000)
     ap.add_argument("--out", default="brain_view.html")
     ap.add_argument("--no-open", action="store_true")
     args = ap.parse_args()
 
+    try:
+        files = args.files or choose_files()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        sys.exit(1)
+
     neurons = conns = roles = None
-    for path in args.files:
+    for path in files:
         rows = read_rows(path)
         cols = rows[0].keys()
         if "pre" in cols and "post" in cols:
