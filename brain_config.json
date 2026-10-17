@@ -1,0 +1,20 @@
+{
+  "n": 5000,
+  "shape": "box",
+  "size": [
+    100.0,
+    100.0,
+    100.0
+  ],
+  "seed": 42,
+  "out": "neurons.csv",
+  "types": [
+    {
+      "name": "neuron",
+      "fraction": 1.0,
+      "sign": 1,
+      "role": "hidden",
+      "zone": "any"
+    }
+  ]
+}
